@@ -23,7 +23,7 @@ public record ConnectionService(AggregationServer server) implements Runnable {
     /**
      * load cache from file
      *
-     * @throws IOException
+     * @throws IOException when failed to load cache
      */
     private synchronized void loadCache() throws IOException {
         File file = new File(server.getDataCachePath());
@@ -57,7 +57,7 @@ public record ConnectionService(AggregationServer server) implements Runnable {
      *
      * @param key      selection key
      * @param selector selector
-     * @throws IOException
+     * @throws IOException when failed to handle request
      */
 
     private void handleAccept(SelectionKey key, Selector selector) throws IOException {
@@ -74,10 +74,10 @@ public record ConnectionService(AggregationServer server) implements Runnable {
     /**
      * read request data
      *
-     * @param socketChannel
-     * @param selectionKey
-     * @return
-     * @throws IOException
+     * @param socketChannel socket channel
+     * @param selectionKey  selection key
+     * @return request data
+     * @throws IOException when failed to read request data
      */
     public String readRequestData(SocketChannel socketChannel, SelectionKey selectionKey) throws IOException {
         ByteBuffer buff = ByteBuffer.allocate(2048);
@@ -117,7 +117,7 @@ public record ConnectionService(AggregationServer server) implements Runnable {
                 //invalid method
                 BaseRequestHandler baseRequestHandler = new BaseRequestHandler(server.getLamportClock(), clientChannel);
                 BaseResponse baseResponse = new BaseResponse();
-                baseResponse.setCode(BaseResponse.HTTP_FORBIDDEN);
+                baseResponse.setStatusCode(BaseResponse.STATUS_CODE_FORBIDDEN);
                 baseResponse.setMsg(BaseResponse.MSG_METHOD_NOT_ALLOW);
                 baseResponse.setLamportClock(server.getLamportClock());
                 baseRequestHandler.response(baseResponse);
@@ -250,7 +250,7 @@ public record ConnectionService(AggregationServer server) implements Runnable {
      *
      * @param socketChannel SocketChannel
      * @param requestData   String request content
-     * @throws IOException
+     * @throws IOException  IOException when request data is invalid
      */
     private void handleContentServerRequest(SocketChannel socketChannel, String requestData) throws IOException {
         String contentServerID = "";

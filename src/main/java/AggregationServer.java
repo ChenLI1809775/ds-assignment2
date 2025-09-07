@@ -46,7 +46,22 @@ public class AggregationServer {
         activeContentServerTrack = new TreeMap<>();
         lamportClock = new LamportClock();
     }
+    /**
+     * A cache that removes the least recently used entry when its size exceeds a given limit.
+     */
+    public static class LRUDataCache<K, V> extends LinkedHashMap<K, V> {
+        private final int maxSize;
 
+        public LRUDataCache(int maxSize) {
+            super(maxSize + 1, 1.0f, true);
+            this.maxSize = maxSize;
+        }
+
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
+            return size() > maxSize;
+        }
+    }
     /**
      * get data cache path
      *
@@ -113,7 +128,7 @@ public class AggregationServer {
     /**
      * get local lamport clock
      *
-     * @return
+     * @return local lamport clock
      */
     public int getLamportClock() {
         return lamportClock.getTime();
@@ -209,7 +224,7 @@ public class AggregationServer {
     /**
      * Check if request handler queue is empty
      *
-     * @return
+     * @return if request handler queue is empty
      */
     public boolean isHandlerQueueEmpty() {
         return requestHandlerQueue.isEmpty();
@@ -222,7 +237,7 @@ public class AggregationServer {
     /**
      * clean outdated data from content server
      *
-     * @throws IOException
+     * @throws IOException if sync to file failed
      */
     public void cleanOutDated() throws IOException {
         Map.Entry<String, ContentServerRequestHandler> lastEntry = activeContentServerTrack.lastEntry();
@@ -240,7 +255,7 @@ public class AggregationServer {
     /**
      * Response to ContentServer or GETClient
      *
-     * @throws IOException
+     * @throws IOException if sync to file failed
      */
     public void response() throws IOException {
         //clean json outdated of 30s
@@ -273,7 +288,7 @@ public class AggregationServer {
 
         if (weatherData == null) {
             // No content
-            baseResponse.setCode(BaseResponse.HTTP_NO_CONTENT);
+            baseResponse.setStatusCode(BaseResponse.STATUS_CODE_NO_CONTENT);
             baseResponse.setMsg(BaseResponse.MSG_NO_CONTENT);
             requestHandler.response(baseResponse);
             return;
@@ -281,7 +296,7 @@ public class AggregationServer {
 
         // Validate weather data before processing
         if (weatherData.getId() == null || weatherData.getId().isEmpty()) {
-            baseResponse.setCode(BaseResponse.HTTP_FORBIDDEN);
+            baseResponse.setStatusCode(BaseResponse.STATUS_CODE_FORBIDDEN);
             baseResponse.setMsg("Invalid weather data: missing ID");
             requestHandler.response(baseResponse);
             return;
@@ -304,16 +319,16 @@ public class AggregationServer {
             // Create file if it doesn't exist
             if (!file.exists()) {
                 if (file.createNewFile()) {
-                    baseResponse.setCode(BaseResponse.HTTP_CREATED);
+                    baseResponse.setStatusCode(BaseResponse.STATUS_CODE_CREATED);
                     baseResponse.setMsg(BaseResponse.MSG_CREATED);
                 } else {
                     // Log warning but don't fail the request
                     //System.err.println("Warning: Could not create file " + dataCachePath);
-                    baseResponse.setCode(BaseResponse.HTTP_SUCCESS);
+                    baseResponse.setStatusCode(BaseResponse.STATUS_CODE_SUCCESS);
                     baseResponse.setMsg(BaseResponse.MSG_OK);
                 }
             } else {
-                baseResponse.setCode(BaseResponse.HTTP_SUCCESS);
+                baseResponse.setStatusCode(BaseResponse.STATUS_CODE_SUCCESS);
                 baseResponse.setMsg(BaseResponse.MSG_OK);
             }
 
@@ -327,7 +342,7 @@ public class AggregationServer {
             System.err.println("Error handling file operations: " + e.getMessage());
             // Even if file operations fail, we've already processed the data successfully
             // So we still send a success response but log the file error
-            baseResponse.setCode(BaseResponse.HTTP_SUCCESS);
+            baseResponse.setStatusCode(BaseResponse.STATUS_CODE_SUCCESS);
             baseResponse.setMsg(BaseResponse.MSG_OK + " (Note: File sync failed)");
             requestHandler.response(baseResponse);
         }

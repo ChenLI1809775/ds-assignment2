@@ -18,7 +18,7 @@ public class BaseRequestHandler implements Comparable<BaseRequestHandler> {
     /**
      * get lamport clock from request
      *
-     * @return
+     * @return lamport clock
      */
     public int getLamportClock() {
         return lamportClock;
@@ -35,7 +35,7 @@ public class BaseRequestHandler implements Comparable<BaseRequestHandler> {
      * Sort by lamport clock in request queue
      *
      * @param other the object to be compared.
-     * @return
+     * @return  int
      */
     @Override
     public int compareTo(BaseRequestHandler other) {
@@ -45,12 +45,12 @@ public class BaseRequestHandler implements Comparable<BaseRequestHandler> {
     /**
      * send response to client
      *
-     * @param simpleResponse SimpleResponse
-     * @throws IOException
+     * @param baseResponse BaseResponse
+     * @throws IOException if an I/O error occurs
      */
-    public void response(BaseResponse simpleResponse) throws IOException {
+    public void response(BaseResponse baseResponse) throws IOException {
         Gson gson = new Gson();
-        String response = gson.toJson(simpleResponse);
+        String response = gson.toJson(baseResponse);
         ByteBuffer writeBuffer = ByteBuffer.wrap(response.getBytes());
         while (writeBuffer.hasRemaining()) {
             socketChannel.write(writeBuffer);
