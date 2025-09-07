@@ -1,7 +1,6 @@
 import com.google.gson.Gson;
 
 import java.io.*;
-import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -106,7 +105,7 @@ public class ContentServer {
      * start server
      *
      * @param interval data update interval, in unit ms, default is 1000ms
-     * @throws IOException
+     * @throws IOException if an I/O error occurs when starting the server
      */
     public void start(int interval) throws IOException {
         if (interval < 0) {
@@ -129,13 +128,12 @@ public class ContentServer {
             //update weather data before return
             WeatherData.updateWeatherData(weatherData, LocalDateTime.now(), new Random());
             String jsonWeatherData = gson.toJson(weatherData);
-            StringBuilder sb = new StringBuilder();
-            sb.append(String.format("PUT %s HTTP/1.1\n", weatherDataFilePath))
-                    .append(String.format("User-Agent: ContentServer/1/0 %s %d\n",
-                            weatherData.getId(), lamportClock.getTime()))
-                    .append("Content-Type: application/json\n")
-                    .append(String.format("Content-Length: %d\n", jsonWeatherData.length()))
-                    .append(jsonWeatherData).append("\n");
+            String sb = String.format("PUT %s HTTP/1.1\n", weatherDataFilePath) +
+                    String.format("User-Agent: ContentServer/1/0 %s %d\n",
+                            weatherData.getId(), lamportClock.getTime()) +
+                    "Content-Type: application/json\n" +
+                    String.format("Content-Length: %d\n", jsonWeatherData.length()) +
+                    jsonWeatherData + "\n";
             writer.println(sb);
             writer.flush();
             //update local Lamport clock

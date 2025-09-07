@@ -40,7 +40,7 @@ public class GETClient {
      * display weather data
      *
      * @param weatherData String, formatted json to display
-     * @return
+     * @return formatted weather data
      */
     public String printWeatherData(WeatherData weatherData) {
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
@@ -52,7 +52,7 @@ public class GETClient {
     /**
      * get weather data from server
      *
-     * @return
+     * @return weather data
      */
     public WeatherData getWeatherData(String weatherDataID) {
         try (Socket socket = new Socket(serverHost, serverPort)) {

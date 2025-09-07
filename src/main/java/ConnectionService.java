@@ -223,7 +223,7 @@ public record ConnectionService(AggregationServer server) implements Runnable {
      *
      * @param socketChannel SocketChannel
      * @param requestData   String
-     * @throws IOException
+     * @throws IOException IOException when request data is invalid
      */
     private void handleGETClientRequest(SocketChannel socketChannel, String requestData) throws IOException {
         String weatherDataID = "";

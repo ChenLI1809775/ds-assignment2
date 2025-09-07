@@ -9,7 +9,7 @@ public class ContentServerRequestHandler extends BaseRequestHandler {
     private WeatherData weatherData;
 
     public ContentServerRequestHandler(SocketChannel socketChannel, WeatherData weatherData,
-                                    String serverID, int lamportClock) {
+                                       String serverID, int lamportClock) {
         super(lamportClock, socketChannel);
         this.serverID = serverID;
         this.weatherData = weatherData;
@@ -45,8 +45,9 @@ public class ContentServerRequestHandler extends BaseRequestHandler {
     /**
      * Check if this handler is  outdated because the content server is not updated for a long time
      *
-     * @param maxUpdateInterval
-     * @return
+     * @param maxUpdateInterval the max update interval to judge when the
+     *                         content server is not updated for a long time
+     * @return true if this handler is outdated
      */
     public boolean isOutdated(double maxUpdateInterval) {
         double differenceInSeconds = (double) Math.abs(System.currentTimeMillis() - modDate) / 1000;
