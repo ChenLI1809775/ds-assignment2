@@ -16,7 +16,6 @@ import java.util.Map;
  */
 public class IOService {
     public static final int CACHE_FILE_CREATE_FAILED = -1;
-    public static final int CACHE_FILE_NOT_CREATED = 0;
     public static final int CACHE_FILE_CREATED = 1;
     public static final int CACHE_FILE_EXIST = 2;
     //file path to save weather data

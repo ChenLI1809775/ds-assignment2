@@ -1,12 +1,11 @@
 import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
 import java.io.*;
+import java.lang.reflect.Type;
 import java.net.Socket;
 import java.time.LocalDateTime;
-import java.util.Objects;
-import java.util.Random;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.*;
 
 
 public class ContentServer {
@@ -24,64 +23,128 @@ public class ContentServer {
 
 
     public ContentServer(String serverURL, String weatherDataFilePath) {
-        //check args
+        // Parse and validate server URL
+        String[] urlParts = parseAndValidateServerURL(serverURL);
+        String hostPart = urlParts[0];
+        int portNumber = Integer.parseInt(urlParts[1]);
+
+        // Validate host and port
+        validateHost(hostPart);
+        validatePort(portNumber);
+
+        // Validate file path
+        validateFilePath(weatherDataFilePath);
+
+        // Initialize final fields
+        this.host = hostPart;
+        this.port = portNumber;
+        this.weatherDataFilePath = weatherDataFilePath;
+        this.gson = new Gson();
+
+        // Load weather data
+        this.weatherData = loadWeatherDataFromFile(weatherDataFilePath);
+
+        this.lamportClock = new LamportClock();
+    }
+
+    /**
+     * Parse and validate server URL format
+     *
+     * @param serverURL the server URL to parse
+     * @return array containing host and port
+     */
+    private String[] parseAndValidateServerURL(String serverURL) {
         String temp = serverURL;
         if (serverURL.contains("http://")) {
             temp = serverURL.replace("http://", "");
         } else if (serverURL.contains("https://")) {
             temp = serverURL.replace("https://", "");
         }
+
         String[] tempSplit = temp.split(":");
         if (tempSplit.length < 2) {
             throw new IllegalArgumentException("The first arg (serverURL) is illegal. Format should be host:port");
         }
-        // Validate host and port
-        String hostPart = tempSplit[0].trim();
-        if (hostPart.isEmpty()) {
+
+        return new String[]{tempSplit[0].trim(), tempSplit[1]};
+    }
+
+    /**
+     * Validate host part of URL
+     *
+     * @param host the host to validate
+     */
+    private void validateHost(String host) {
+        if (host.isEmpty()) {
             throw new IllegalArgumentException("Host cannot be empty");
         }
+    }
 
-        try {
-            port = Integer.parseInt(tempSplit[1]);
-            if (port < 1 || port > 65535) {
-                throw new IllegalArgumentException("Port must be between 1 and 65535");
-            }
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Invalid port number: " + tempSplit[1]);
+    /**
+     * Validate port number
+     *
+     * @param port the port to validate
+     */
+    private void validatePort(int port) {
+        if (port < 1 || port > 65535) {
+            throw new IllegalArgumentException("Port must be between 1 and 65535");
         }
+    }
 
-        File file = new File(weatherDataFilePath);
+    /**
+     * Validate weather data file path
+     *
+     * @param filePath the file path to validate
+     */
+    private void validateFilePath(String filePath) {
+        File file = new File(filePath);
         if (!file.exists() || !file.isFile()) {
-            throw new IllegalArgumentException("The second arg (weatherDataFilePath) is illegal: file does not exist or is not a file");
+            throw new IllegalArgumentException("The second arg (weatherDataFilePath) is " +
+                    "illegal: file does not exist or is not a file");
         }
 
         if (!file.canRead()) {
-            throw new IllegalArgumentException("Cannot read weather data file: " + weatherDataFilePath);
+            throw new IllegalArgumentException("Cannot read weather data file: " + filePath);
         }
+    }
 
-        // Initialize final fields
-        this.host = hostPart;
-        this.weatherDataFilePath = weatherDataFilePath;
-        this.gson = new Gson();
-        // Load weather data with proper resource management
-        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
-            this.weatherData = gson.fromJson(br, WeatherData.class);
+    /**
+     * Load weather data from file
+     *
+     * @param filePath the file path to load data from
+     * @return the loaded WeatherData object
+     */
+    private WeatherData loadWeatherDataFromFile(String filePath) {
+        try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
+            // parse json array to get first weatherData
+            Type listType = new TypeToken<ArrayList<WeatherData>>() {
+            }.getType();
+            ArrayList<WeatherData> weatherDataList = gson.fromJson(br, listType);
 
-            if (this.weatherData == null) {
-                throw new RuntimeException(String.format("Data file (%s) is empty or contains invalid JSON", weatherDataFilePath));
-            }
+            if (weatherDataList != null && !weatherDataList.isEmpty()) {
+                // Get the first weatherData
+                WeatherData data = weatherDataList.get(0);
 
-            // Validate that weather data has an ID
-            if (this.weatherData.getId() == null || this.weatherData.getId().isEmpty()) {
-                throw new RuntimeException(String.format("Weather data in file (%s) must have a valid ID", weatherDataFilePath));
+                // Validate that weather data has an ID
+                if (data.getId() == null || data.getId().isEmpty()) {
+                    throw new RuntimeException(String.format("Weather data in file (%s) must have a valid ID",
+                            filePath));
+                }
+
+                return data;
+            } else {
+                throw new RuntimeException(String.format("Data file (%s) is empty or contains invalid JSON",
+                        filePath));
             }
         } catch (IOException e) {
-            throw new RuntimeException(String.format("Failed to read data file (%s): %s", weatherDataFilePath, e.getMessage()), e);
+            throw new RuntimeException(String.format("Failed to read data file (%s): %s", filePath,
+                    e.getMessage()), e);
         } catch (com.google.gson.JsonSyntaxException e) {
-            throw new RuntimeException(String.format("Data file (%s) contains invalid JSON: %s", weatherDataFilePath, e.getMessage()), e);
+            throw new RuntimeException(String.format("Data file (%s) contains invalid JSON: %s", filePath,
+                    e.getMessage()), e);
         }
-        this.lamportClock = new LamportClock();
     }
+
 
     /**
      * TimerTask for sending data
@@ -161,9 +224,9 @@ public class ContentServer {
     }
 
     /**
-     * check if it is running
+     * check whether server is running
      *
-     * @return true is running
+     * @return true if server is running, false otherwise
      */
     public boolean isRunning() {
         return !Objects.isNull(timer);
@@ -178,13 +241,13 @@ public class ContentServer {
             timer.cancel();
             timer = null;
         }
-        System.out.printf("ContentServer id=%s stop%n", weatherData.getId());
+        System.out.printf("ContentServer id=%s is stopped%n", weatherData.getId());
     }
 
     /**
-     * load json data from file
+     * get weather data
      *
-     * @return WeatherData
+     * @return weather data
      */
     public WeatherData getWeatherData() {
         return weatherData;
@@ -199,8 +262,9 @@ public class ContentServer {
         } else {
             //Illegal arguments, cancel start up
             throw new IllegalArgumentException("Illegal arguments," +
-                    " the first is the server name and port number (as for GET) and" +
-                    "the second is the location of a file in the file system local");
+                    " the first argument should be the server URL (host:port) " +
+                    "and the second argument should be the path to the weather data file");
+
         }
     }
 }

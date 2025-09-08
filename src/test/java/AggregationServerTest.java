@@ -38,7 +38,8 @@ public class AggregationServerTest {
             br.close();
 
             if (weatherDataList != null && !weatherDataList.isEmpty()) {
-                weatherData = weatherDataList.get(0); // 获取第一个元素作为测试数据
+                // get first weatherData
+                weatherData = weatherDataList.get(0);
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -192,7 +193,6 @@ public class AggregationServerTest {
     /**
      * Test Multiple PUT
      *
-     * @throws IOException
      */
     @Test
     public void testMultiplePut() throws IOException, InterruptedException {
