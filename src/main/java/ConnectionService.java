@@ -1,8 +1,6 @@
 import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
 
-import java.io.*;
-import java.lang.reflect.Type;
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
@@ -10,7 +8,9 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.Iterator;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * class for handle client connection
@@ -20,37 +20,6 @@ public record ConnectionService(AggregationServer server) implements Runnable {
     public static final String METHOD_PUT = "PUT";
     public static final String METHOD_GET = "GET";
 
-    /**
-     * load cache from file
-     *
-     * @throws IOException when failed to load cache
-     */
-    private synchronized void loadCache() throws IOException {
-        File file = new File(server.getDataCachePath());
-        if (!file.exists()) {
-            return;
-        }
-
-        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
-            Gson gson = new Gson();
-            //parse json to list
-            Type type = new TypeToken<ArrayList<WeatherData>>() {
-            }.getType();
-            ArrayList<WeatherData> list = gson.fromJson(reader, type);
-
-            if (list != null && !list.isEmpty()) {
-                //update cache
-                for (WeatherData weatherData : list) {
-                    if (weatherData != null && weatherData.getId() != null) {
-                        server.updateDataCache(weatherData.getId(), weatherData);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            System.err.println("Failed to load cache from file: " + e.getMessage());
-            throw new IOException("Error loading cache data", e);
-        }
-    }
 
     /**
      * handle client request
@@ -115,12 +84,8 @@ public record ConnectionService(AggregationServer server) implements Runnable {
                 handleGETClientRequest(clientChannel, requestData);
             } else {
                 //invalid method
-                BaseRequestHandler baseRequestHandler = new BaseRequestHandler(server.getLamportClock(), clientChannel);
-                BaseResponse baseResponse = new BaseResponse();
-                baseResponse.setStatusCode(BaseResponse.STATUS_CODE_FORBIDDEN);
-                baseResponse.setMsg(BaseResponse.MSG_METHOD_NOT_ALLOW);
-                baseResponse.setLamportClock(server.getLamportClock());
-                baseRequestHandler.response(baseResponse);
+                server.putErrorRequestHandler("Client", clientChannel,
+                        "Method not allowed. Allow: PUT, GET", BaseResponse.STATUS_CODE_FORBIDDEN);
             }
         }
     }
@@ -158,21 +123,15 @@ public record ConnectionService(AggregationServer server) implements Runnable {
     public void run() {
         Selector selector = null;
         ServerSocketChannel serverChannel = null;
-
         try {
-            // Load weather data cached from file at start
-            loadCache();
-
             // Initialize NIO components
             selector = Selector.open();
             serverChannel = ServerSocketChannel.open();
-
             serverChannel.socket().bind(new InetSocketAddress(server.getPort()));
             serverChannel.configureBlocking(false);
             serverChannel.register(selector, SelectionKey.OP_ACCEPT);
 
             //System.out.println("Server started and listening on port " + server.getPort());
-
             // Main event loop
             while (server.isRunning()) {
                 try {
@@ -196,6 +155,7 @@ public record ConnectionService(AggregationServer server) implements Runnable {
                                 handleRead(key);
                             }
                         } catch (Exception e) {
+                            e.printStackTrace();
                             System.err.println("Error handling client connection: " + e.getMessage());
                             key.cancel();
                             closeChannel(key.channel());
@@ -233,6 +193,9 @@ public record ConnectionService(AggregationServer server) implements Runnable {
                 //get id and Lamport clock
                 String[] UA = line.split(" ");
                 if (UA.length < 4) {
+                    server.putErrorRequestHandler("GETClient", socketChannel,
+                            "Invalid user-agent in header!",
+                            BaseResponse.STATUS_CODE_FORBIDDEN);
                     throw new IOException("Invalid user-agent in header!");
                 }
                 weatherDataID = UA[2];
@@ -250,7 +213,7 @@ public record ConnectionService(AggregationServer server) implements Runnable {
      *
      * @param socketChannel SocketChannel
      * @param requestData   String request content
-     * @throws IOException  IOException when request data is invalid
+     * @throws IOException IOException when request data is invalid
      */
     private void handleContentServerRequest(SocketChannel socketChannel, String requestData) throws IOException {
         String contentServerID = "";
@@ -263,6 +226,9 @@ public record ConnectionService(AggregationServer server) implements Runnable {
                 //get id and Lamport clock
                 String[] UA = requestLine.split(" ");
                 if (UA.length < 4) {
+                    server.putErrorRequestHandler(contentServerID, socketChannel,
+                            "Invalid user-agent in header!",
+                            BaseResponse.STATUS_CODE_FORBIDDEN);
                     throw new IOException("Invalid user-agent in header!");
                 }
                 contentServerID = UA[2];
@@ -280,20 +246,19 @@ public record ConnectionService(AggregationServer server) implements Runnable {
         }
         if (!Objects.equals(jsonWeatherData.toString(), "")) {
             Gson gson = new Gson();
-            WeatherData weatherData;
             try {
-                weatherData = gson.fromJson(jsonWeatherData.toString(), WeatherData.class);
+                WeatherData weatherData = gson.fromJson(jsonWeatherData.toString(), WeatherData.class);
+                //put request  handler to queue
+                server.putContentPutRequestHandler(contentServerID, socketChannel, weatherData);
             } catch (Exception e) {
                 //throw incorrect json error
-                BaseRequestHandler handler = new BaseRequestHandler(server.getLamportClock(), socketChannel);
-                throw new BaseResponse.ServerInternalException(e.getMessage(), handler);
+                server.putErrorRequestHandler(contentServerID, socketChannel, "Invalid json data!",
+                        BaseResponse.STATUS_CODE_FORBIDDEN);
             }
-            //put request  handler to queue
-            server.putContentPutRequestHandler(contentServerID, socketChannel, weatherData);
         } else {
             //request without any data
-            BaseRequestHandler handler = new BaseRequestHandler(server.getLamportClock(), socketChannel);
-            throw new BaseResponse.ServerInternalException("No json data to process!", handler);
+            server.putErrorRequestHandler(contentServerID, socketChannel, "No json data to process!",
+                    BaseResponse.STATUS_CODE_NO_CONTENT);
         }
 
     }

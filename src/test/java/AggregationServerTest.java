@@ -24,17 +24,22 @@ public class AggregationServerTest {
     public static final int TYPE_GET_INVALID_CONTENT = 5;
 
     private static WeatherData weatherData;
+    public static String defaultTestDataCachePath = "src/test/resources/weatherData.json";
 
     @BeforeAll
     public static void setUp() {
         Gson gson = new Gson();
-        String weatherDataPath = "src/test/resources/weatherData.json";
         try {
             // read json from file
-            BufferedReader br = new BufferedReader(new FileReader(weatherDataPath));
-            // parse json to weatherData
-            weatherData = gson.fromJson(br, WeatherData.class);
+            BufferedReader br = new BufferedReader(new FileReader(defaultTestDataCachePath));
+            // parse json array to get first weatherData
+            Type listType = new TypeToken<ArrayList<WeatherData>>(){}.getType();
+            ArrayList<WeatherData> weatherDataList = gson.fromJson(br, listType);
             br.close();
+
+            if (weatherDataList != null && !weatherDataList.isEmpty()) {
+                weatherData = weatherDataList.get(0); // 获取第一个元素作为测试数据
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -141,7 +146,8 @@ public class AggregationServerTest {
         String[] cmdArgs = {String.valueOf(7777)};
         System.setIn(new ByteArrayInputStream(String.join(" ", cmdArgs).getBytes()));
         String[] args = new Scanner(System.in).nextLine().split(" ");
-        AggregationServer aggregationServer = new AggregationServer(Integer.parseInt(args[0]));
+        AggregationServer aggregationServer = new AggregationServer(Integer.parseInt(args[0]),
+                defaultTestDataCachePath);
         assertEquals(7777, aggregationServer.getPort());
     }
 
@@ -149,8 +155,8 @@ public class AggregationServerTest {
      * test start
      */
     @Test
-    public void testStart() throws IOException {
-        AggregationServer aggregationServer = new AggregationServer(7778);
+    public void testStart() {
+        AggregationServer aggregationServer = new AggregationServer(7778, defaultTestDataCachePath);
         aggregationServer.start();
         aggregationServer.stop();
     }
@@ -159,9 +165,9 @@ public class AggregationServerTest {
      * test not allow http method
      */
     @Test
-    public void testNotAllowMethod() throws IOException {
+    public void testNotAllowMethod() {
         int port = 7777;
-        AggregationServer server = new AggregationServer(port);
+        AggregationServer server = new AggregationServer(port, defaultTestDataCachePath);
         server.start();
         String requestData = createRequestData(TYPE_NOT_ALLOWED, weatherData);
         GETClientResponse getClientResponse = mockRequest(requestData, port);
@@ -173,9 +179,9 @@ public class AggregationServerTest {
      * test PUT but no content
      */
     @Test
-    public void testPutNoContent() throws IOException {
+    public void testPutNoContent() {
         int port = 7778;
-        AggregationServer server = new AggregationServer(port);
+        AggregationServer server = new AggregationServer(port, defaultTestDataCachePath);
         server.start();
         String requestData = createRequestData(TYPE_PUT_NO_CONTENT, weatherData);
         BaseResponse baseResponse = mockRequest(requestData, port);
@@ -189,17 +195,18 @@ public class AggregationServerTest {
      * @throws IOException
      */
     @Test
-    public void testMultiplePut() throws IOException {
+    public void testMultiplePut() throws IOException, InterruptedException {
         int port = 7779;
+        String cacheFilePath = "src/test/resources/testMultiplePut.json";
         //remove old weather data cache file
-        File file = new File("src/test/resources/testMultiplePut.json");
+        File file = new File(cacheFilePath);
         if (file.exists()) {
-            file.delete();
+            boolean delete = file.delete();
         }
-        AggregationServer server = new AggregationServer(port);
+        AggregationServer server = new AggregationServer(port, cacheFilePath);
         server.start();
+
         //Change AggregationServer cache file path
-        server.setDataCachePath(file.getPath());
         String requestData = createRequestData(TYPE_PUT_VALID_CONTENT, weatherData);
         //First data put
         BaseResponse baseResponse = mockRequest(requestData, port);
@@ -211,8 +218,10 @@ public class AggregationServerTest {
         weatherData1.setId("IDS60903");
         WeatherData.updateWeatherData(weatherData1, LocalDateTime.now(), new Random());
         String requestData1 = createRequestData(TYPE_PUT_VALID_CONTENT, weatherData1);
-        BaseResponse simpleResponse1 = mockRequest(requestData1, port);
-        assertEquals(BaseResponse.STATUS_CODE_SUCCESS, simpleResponse1.getStatusCode());
+        BaseResponse baseResponse1 = mockRequest(requestData1, port);
+        assertEquals(BaseResponse.STATUS_CODE_SUCCESS, baseResponse1.getStatusCode());
+
+        Thread.sleep(5);
         //check if data has been written correctly
         String content = new String(Files.readAllBytes(Paths.get(file.getPath())));
         Type listType = new TypeToken<ArrayList<WeatherData>>() {
@@ -228,13 +237,13 @@ public class AggregationServerTest {
      * test put request with invalid json
      */
     @Test
-    public void testPutWithInvalidData() throws IOException {
+    public void testPutWithInvalidData() {
         int port = 7780;
-        AggregationServer server = new AggregationServer(port);
+        AggregationServer server = new AggregationServer(port, defaultTestDataCachePath);
         server.start();
         String requestData = createRequestData(TYPE_PUT_INVALID_CONTENT, weatherData);
         BaseResponse baseResponse = mockRequest(requestData, port);
-        assertEquals(BaseResponse.STATUS_CODE_SERVER_ERROR, baseResponse.getStatusCode());
+        assertEquals(BaseResponse.STATUS_CODE_FORBIDDEN, baseResponse.getStatusCode());
         server.stop();
     }
 
@@ -242,9 +251,9 @@ public class AggregationServerTest {
      * Test get data with valid request data from GETClient
      */
     @Test
-    public void testGetWithValidRequestData() throws IOException {
+    public void testGetWithValidRequestData() {
         int port = 7781;
-        AggregationServer server = new AggregationServer(port);
+        AggregationServer server = new AggregationServer(port, defaultTestDataCachePath);
         server.start();
         String putRequestData = createRequestData(TYPE_PUT_VALID_CONTENT, weatherData);
         //put data to server
@@ -263,9 +272,9 @@ public class AggregationServerTest {
      * Test get data with invalid request data from GETClient
      */
     @Test
-    public void testGetWithInValidRequestData() throws IOException {
+    public void testGetWithInValidRequestData() {
         int port = 7782;
-        AggregationServer server = new AggregationServer(port);
+        AggregationServer server = new AggregationServer(port, defaultTestDataCachePath);
         server.start();
         //get data from server
         String getRequestData = createRequestData(TYPE_GET_INVALID_CONTENT, weatherData);
@@ -278,44 +287,71 @@ public class AggregationServerTest {
 
     @Test
     public void testCleanOutdated() throws IOException, InterruptedException {
+        String cacheFilePath = "src/test/resources/testCleanOutdated.json";
         int port = 7783;
-        File file = new File("src/test/resources/testCleanOutdated.json");
+        File file = new File(cacheFilePath);
         if (file.exists()) {
-            file.delete();
+            boolean delete = file.delete();
         }
-        AggregationServer server = new AggregationServer(port);
+        AggregationServer server = new AggregationServer(port, cacheFilePath);
+        server.setDataCachePath(file.getPath());
         server.start();
-        double delayMs = 3000;
-        // change max update interval for content server to 3s to speed up this test
+
+        double delayMs = 4000;
+        // change max update interval for content server to 5s to speed up this test
         server.setMaxUpdateInterval(delayMs / 1000);
+
         //create and put new data 1
         Gson gson = new Gson();
         WeatherData weatherData1 = gson.fromJson(gson.toJson(weatherData), WeatherData.class);
         weatherData1.setId("IDS60903");
         String requestData1 = createRequestData(TYPE_PUT_VALID_CONTENT, weatherData1);
-        BaseResponse simpleResponse1 = mockRequest(requestData1, port);
-        assertEquals(BaseResponse.STATUS_CODE_CREATED, simpleResponse1.getStatusCode());
+        BaseResponse baseResponse1 = mockRequest(requestData1, port);
+        assertEquals(BaseResponse.STATUS_CODE_CREATED, baseResponse1.getStatusCode());
+
         //put new data2
         WeatherData weatherData2 = gson.fromJson(gson.toJson(weatherData), WeatherData.class);
-        weatherData1.setId("IDS60904");
-        String requestData2 = createRequestData(TYPE_PUT_VALID_CONTENT, weatherData1);
-        BaseResponse simpleResponse2 = mockRequest(requestData2, port);
-        assertEquals(BaseResponse.STATUS_CODE_SUCCESS, simpleResponse2.getStatusCode());
+        weatherData2.setId("IDS60904");
+        String requestData2 = createRequestData(TYPE_PUT_VALID_CONTENT, weatherData2);
+        BaseResponse baseResponse2 = mockRequest(requestData2, port);
+        assertEquals(BaseResponse.STATUS_CODE_SUCCESS, baseResponse2.getStatusCode());
 
-        //get data 1
+        Thread.sleep(1000);
+        //Check if data has been written correctly
+        String content = new String(Files.readAllBytes(Paths.get(file.getPath())));
+        Type listType = new TypeToken<ArrayList<WeatherData>>() {
+        }.getType();
+        ArrayList<WeatherData> weatherDataList = gson.fromJson(content, listType);
+        assertEquals(2, weatherDataList.size());
+
+        //Ensure data can be  retrieved
         String getRequestData1 = createRequestData(TYPE_GET_VALID_CONTENT, weatherData1);
-        GETClientResponse getResponse = mockRequest(getRequestData1, port);
-        assertEquals(BaseResponse.STATUS_CODE_SUCCESS, getResponse.getStatusCode());
-        //wait it outdated
-        Thread.sleep((long) delayMs);
-        //expect the data 1 has been removed
-        getResponse = mockRequest(getRequestData1, port);
-        assertEquals(BaseResponse.STATUS_CODE_SUCCESS, getResponse.getStatusCode());
+        GETClientResponse getResponse1 = mockRequest(getRequestData1, port);
+        assertEquals(weatherData1.getId(), getResponse1.getWeatherData().getId());
+        assertEquals(BaseResponse.STATUS_CODE_SUCCESS, getResponse1.getStatusCode());
 
-        //expect the data 2 has been removed
         String getRequestData2 = createRequestData(TYPE_GET_VALID_CONTENT, weatherData2);
         GETClientResponse getResponse2 = mockRequest(getRequestData2, port);
+        assertEquals(weatherData2.getId(), getResponse2.getWeatherData().getId());
+        assertEquals(BaseResponse.STATUS_CODE_SUCCESS, getResponse2.getStatusCode());
+
+        //wait it outdated
+        Thread.sleep(10000);
+        //expect the data 1 has been removed
+        GETClientResponse getResponse = mockRequest(getRequestData1, port);
+        assertEquals(BaseResponse.STATUS_CODE_NOT_FOUND, getResponse.getStatusCode());
+
+        //expect the data 2 has been removed
+        getRequestData2 = createRequestData(TYPE_GET_VALID_CONTENT, weatherData2);
+        getResponse2 = mockRequest(getRequestData2, port);
         assertEquals(BaseResponse.STATUS_CODE_NOT_FOUND, getResponse2.getStatusCode());
+
+        //Check if data has been deleted correctly
+        String content2 = new String(Files.readAllBytes(Paths.get(file.getPath())));
+        Type listType2 = new TypeToken<ArrayList<WeatherData>>() {
+        }.getType();
+        ArrayList<WeatherData> weatherDataList2 = gson.fromJson(content2, listType2);
+        assertEquals(0, weatherDataList2.size());
 
         server.stop();
     }
@@ -324,13 +360,15 @@ public class AggregationServerTest {
      * test the update of the lamport clock
      */
     @Test
-    public void testDataUpdateAndLamportClock() throws IOException {
+    public void testDataUpdateAndLamportClock() {
+        String cacheFilePath = "src/test/resources/testDataUpdateAndLamportClock.json";
         int port = 7784;
-        File file = new File("src/test/resources/testDataUpdateAndLamportClock.json");
+        File file = new File(cacheFilePath);
         if (file.exists()) {
             file.delete();
         }
-        AggregationServer server = new AggregationServer(port);
+        AggregationServer server = new AggregationServer(port, cacheFilePath);
+        server.start();
         //Send the first PUT
         Gson gson = new Gson();
         WeatherData weatherData1 = gson.fromJson(gson.toJson(weatherData), WeatherData.class);
@@ -359,5 +397,7 @@ public class AggregationServerTest {
         assertNotNull(getResponse2.getWeatherData());
         assertEquals(weatherData1.getId(), getResponse2.getWeatherData().getId());
         assertEquals(weatherData1.getLat(), getResponse2.getWeatherData().getLat());
+
+        server.stop();
     }
 }

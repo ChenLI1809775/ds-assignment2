@@ -10,9 +10,13 @@ public class BaseRequestHandler implements Comparable<BaseRequestHandler> {
     //lamport clock from request
     private int lamportClock;
 
+    //Latest system time when the data is modified
+    private long modDate;
+
     public BaseRequestHandler(int lamportClock, SocketChannel socketChannel) {
         this.lamportClock = lamportClock;
         this.socketChannel = socketChannel;
+        this.modDate = System.currentTimeMillis();
     }
 
     /**
@@ -25,6 +29,23 @@ public class BaseRequestHandler implements Comparable<BaseRequestHandler> {
     }
 
     /**
+     * Refresh the modDate
+     */
+    public void refreshModDate() {
+        modDate = System.currentTimeMillis();
+    }
+    /**
+     * Check if this handler is  outdated because the content server is not updated for a long time
+     *
+     * @param maxUpdateInterval the max update interval to judge when the
+     *                         content server is not updated for a long time
+     * @return true if this handler is outdated
+     */
+    public boolean isOutdated(double maxUpdateInterval) {
+        double differenceInSeconds = (double) Math.abs(System.currentTimeMillis() - modDate) / 1000;
+        return differenceInSeconds > maxUpdateInterval && socketChannel.socket().isClosed();
+    }
+    /**
      * set lamport clock from request
      */
     public void setLamportClock(int lamportClock) {
@@ -32,14 +53,14 @@ public class BaseRequestHandler implements Comparable<BaseRequestHandler> {
     }
 
     /**
-     * Sort by lamport clock in request queue
+     * Sort by modDate in active track
      *
      * @param other the object to be compared.
-     * @return  int
+     * @return int
      */
     @Override
     public int compareTo(BaseRequestHandler other) {
-        return Integer.compare(this.lamportClock, other.getLamportClock());
+        return Long.compare(other.modDate, this.modDate);
     }
 
     /**

@@ -1,8 +1,5 @@
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+import org.xml.sax.helpers.AttributesImpl;
 
-import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.channels.SocketChannel;
 import java.util.*;
@@ -11,23 +8,19 @@ import java.util.concurrent.Executors;
 
 public class AggregationServer {
 
-    //file path to save weather data
-    private String dataCachePath = "aggregationWeatherData.json";
+
     //indicate if server is running
     private volatile boolean isRunning;
     //port number,default is 4567
     private int port = 4567;
 
-    //weather data cache
-    private final LRUDataCache<String, WeatherData> dataCache;
-
     //Two threads to handle request
-    private final ExecutorService executor = Executors.newFixedThreadPool(2);
+    private final ExecutorService executor = Executors.newFixedThreadPool(3);
 
     //Request queue
     private final Queue<BaseRequestHandler> requestHandlerQueue;
 
-    //Max update interval for content server
+    //Max update interval(s) for content server
     private double maxUpdateInterval = 30.0;
     //local lamport clock
     private final LamportClock lamportClock;
@@ -35,41 +28,28 @@ public class AggregationServer {
     //use a map to track if connection is active
     private final TreeMap<String, ContentServerRequestHandler> activeContentServerTrack;
 
+    private final IOService ioService;
 
-    public AggregationServer(int port) {
+    public AggregationServer(int port, String dataCachePath) {
         if (port > 0) {
             //port number from command line
             this.port = port;
         }
         requestHandlerQueue = new PriorityQueue<>();
-        dataCache = new LRUDataCache<>(30);
+        ioService = new IOService(dataCachePath);
         activeContentServerTrack = new TreeMap<>();
         lamportClock = new LamportClock();
     }
-    /**
-     * A cache that removes the least recently used entry when its size exceeds a given limit.
-     */
-    public static class LRUDataCache<K, V> extends LinkedHashMap<K, V> {
-        private final int maxSize;
 
-        public LRUDataCache(int maxSize) {
-            super(maxSize + 1, 1.0f, true);
-            this.maxSize = maxSize;
-        }
-
-        @Override
-        protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
-            return size() > maxSize;
-        }
-    }
     /**
      * get data cache path
      *
      * @return data cache path
      */
     public String getDataCachePath() {
-        return dataCachePath;
+        return ioService.getDataCachePath();
     }
+
 
     /**
      * set data cache path
@@ -77,14 +57,7 @@ public class AggregationServer {
      * @param dataCachePath data cache path
      */
     public void setDataCachePath(String dataCachePath) {
-        this.dataCachePath = dataCachePath;
-    }
-
-    /**
-     * update data cache
-     */
-    public void updateDataCache(String ID, WeatherData weatherData) {
-        dataCache.put(ID, weatherData);
+        ioService.setDataCachePath(dataCachePath);
     }
 
     /**
@@ -145,32 +118,6 @@ public class AggregationServer {
 
 
     /**
-     * sync data cache to file
-     */
-    public synchronized void syncCacheToFile() throws IOException {
-        if (dataCache.values().size() < 1) {
-            return;
-        }
-        ArrayList<WeatherData> weatherDataList = new ArrayList<>(dataCache.values());
-        Gson gson = new GsonBuilder().setPrettyPrinting().create();
-        try (FileWriter writer = new FileWriter(dataCachePath)) {
-            writer.write(gson.toJson(weatherDataList));
-        }
-    }
-
-    /**
-     * start server
-     */
-    public void start() {
-        System.out.println("AggregationServer started at port " + port);
-        //Thread to handle response
-        new Thread(new ResponseService(this)).start();
-        //Thread to handle connection
-        new Thread(new ConnectionService(this)).start();
-        isRunning = true;
-    }
-
-    /**
      * Put Get request from GETClient to queue
      *
      * @param weatherDataID weather data ID
@@ -178,16 +125,12 @@ public class AggregationServer {
      */
     public void putGetRequestHandler(String weatherDataID, SocketChannel socketChannel) {
         GetClientRequestHandler requestHandler;
-        if (dataCache.containsKey(weatherDataID)) {
-            //Client connected before,reuse request handler
-            WeatherData weatherData = dataCache.get(weatherDataID);
-            requestHandler = new GetClientRequestHandler(socketChannel, lamportClock.getTime(), weatherData);
-        } else {
-            //New connection
-            requestHandler = new GetClientRequestHandler(socketChannel, lamportClock.getTime(), null);
-        }
+        // First check in memory cache
+        WeatherData weatherData = ioService.findWeatherData(weatherDataID);
+        requestHandler = new GetClientRequestHandler(socketChannel, lamportClock.getTime(), weatherData);
         requestHandlerQueue.add(requestHandler);
     }
+
 
     /**
      * Put ContentPut request from ContentServer to queue
@@ -197,6 +140,7 @@ public class AggregationServer {
      * @param weatherData     weather data
      */
     public void putContentPutRequestHandler(String contentServerID, SocketChannel socketChannel, WeatherData weatherData) {
+
         //request handler
         ContentServerRequestHandler handler;
         if (activeContentServerTrack.containsKey(weatherData.getId())) {
@@ -222,6 +166,20 @@ public class AggregationServer {
     }
 
     /**
+     * Put Error request from ErrorClient to queue
+     *
+     * @param clientID      client ID
+     * @param socketChannel socket channel from ErrorClient
+     * @param msg           error message
+     * @param statusCode    status code
+     */
+    public void putErrorRequestHandler(String clientID, SocketChannel socketChannel, String msg, int statusCode) {
+        ErrorRequestHandler requestHandler = new ErrorRequestHandler(lamportClock.getTime(),
+                socketChannel, clientID, msg, statusCode);
+        requestHandlerQueue.add(requestHandler);
+    }
+
+    /**
      * Check if request handler queue is empty
      *
      * @return if request handler queue is empty
@@ -236,18 +194,19 @@ public class AggregationServer {
 
     /**
      * clean outdated data from content server
-     *
-     * @throws IOException if sync to file failed
      */
-    public void cleanOutDated() throws IOException {
-        Map.Entry<String, ContentServerRequestHandler> lastEntry = activeContentServerTrack.lastEntry();
-        if (!Objects.isNull(lastEntry)) {
-            ContentServerRequestHandler requestHandler = lastEntry.getValue();
-            if (requestHandler.isOutdated(maxUpdateInterval)) {
-                activeContentServerTrack.remove(lastEntry.getKey());
-                dataCache.remove(lastEntry.getKey());
-                //sync data changes to file
-                syncCacheToFile();
+    public void cleanOutDated() {
+        Iterator<Map.Entry<String, ContentServerRequestHandler>> iterator =
+                activeContentServerTrack.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<String, ContentServerRequestHandler> entry = iterator.next();
+            //Check if the entry is outdated
+            if (entry.getValue().isOutdated(maxUpdateInterval)) {
+                //Delete the outdated entry
+                iterator.remove();
+                //remove from cache
+                ioService.cleanCacheByID(entry.getKey());
+                System.out.println("Outdated data removed: " + entry.getKey());
             }
         }
     }
@@ -258,9 +217,16 @@ public class AggregationServer {
      * @throws IOException if sync to file failed
      */
     public void response() throws IOException {
-        //clean json outdated of 30s
         cleanOutDated();
+        if (ioService.canSync()) {
+            ioService.syncCacheToFile();
+        }
         if (isHandlerQueueEmpty()) {
+            try {
+                Thread.sleep(1);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
             return;
         }
         BaseRequestHandler requestHandler = getRequestHandler();
@@ -272,6 +238,13 @@ public class AggregationServer {
             BaseResponse baseResponse = new BaseResponse();
             baseResponse.setLamportClock(getLamportClock());
             getRequestHandler.response(baseResponse);
+        } else if (requestHandler instanceof ErrorRequestHandler errorRequestHandler) {
+            //response to error client
+            BaseResponse baseResponse = new BaseResponse();
+            baseResponse.setLamportClock(errorRequestHandler.getLamportClock());
+            baseResponse.setStatusCode(errorRequestHandler.statusCode);
+            baseResponse.setMsg(errorRequestHandler.errMsg);
+            errorRequestHandler.response(baseResponse);
         }
     }
 
@@ -292,82 +265,72 @@ public class AggregationServer {
             baseResponse.setMsg(BaseResponse.MSG_NO_CONTENT);
             requestHandler.response(baseResponse);
             return;
-        }
-
-        // Validate weather data before processing
-        if (weatherData.getId() == null || weatherData.getId().isEmpty()) {
+        } else if (weatherData.getId() == null || weatherData.getId().isEmpty()) {
+            // Validate weather data before processing
             baseResponse.setStatusCode(BaseResponse.STATUS_CODE_FORBIDDEN);
             baseResponse.setMsg("Invalid weather data: missing ID");
             requestHandler.response(baseResponse);
             return;
         }
 
-        // Save weather data in cache
-        dataCache.put(weatherData.getId(), weatherData);
-
-        try {
-            File file = new File(dataCachePath);
-
-            // Create parent directories if they don't exist
-            File parentDir = file.getParentFile();
-            if (parentDir != null && !parentDir.exists()) {
-                if (!parentDir.mkdirs()) {
-                    System.err.println("Warning: Failed to create parent directories for " + dataCachePath);
-                }
-            }
-
-            // Create file if it doesn't exist
-            if (!file.exists()) {
-                if (file.createNewFile()) {
-                    baseResponse.setStatusCode(BaseResponse.STATUS_CODE_CREATED);
-                    baseResponse.setMsg(BaseResponse.MSG_CREATED);
-                } else {
-                    // Log warning but don't fail the request
-                    //System.err.println("Warning: Could not create file " + dataCachePath);
-                    baseResponse.setStatusCode(BaseResponse.STATUS_CODE_SUCCESS);
-                    baseResponse.setMsg(BaseResponse.MSG_OK);
-                }
-            } else {
-                baseResponse.setStatusCode(BaseResponse.STATUS_CODE_SUCCESS);
-                baseResponse.setMsg(BaseResponse.MSG_OK);
-            }
-
-            // Send response before file I/O to reduce latency
+        // Save weather data
+        ioService.putDataToCache(weatherData.getId(), weatherData);
+        //response
+        int cacheStatus = ioService.getCacheFileStatus();
+        if (cacheStatus == IOService.CACHE_FILE_CREATED) {
+            baseResponse.setStatusCode(BaseResponse.STATUS_CODE_CREATED);
+            baseResponse.setMsg(BaseResponse.MSG_CREATED);
             requestHandler.response(baseResponse);
-
-            // Write to file asynchronously or in a separate thread if possible
-            syncCacheToFile();
-
-        } catch (IOException e) {
-            System.err.println("Error handling file operations: " + e.getMessage());
-            // Even if file operations fail, we've already processed the data successfully
-            // So we still send a success response but log the file error
+        } else if (cacheStatus == IOService.CACHE_FILE_CREATE_FAILED) {
+            baseResponse.setStatusCode(BaseResponse.STATUS_CODE_SERVER_ERROR);
+            baseResponse.setMsg(BaseResponse.MSG_SERVER_ERROR);
+            requestHandler.response(baseResponse);
+            baseResponse.setStatusCode(BaseResponse.STATUS_CODE_SERVER_ERROR);
+            baseResponse.setMsg(BaseResponse.MSG_SERVER_ERROR + " (Note: File sync failed)");
+            requestHandler.response(baseResponse);
+        } else {
             baseResponse.setStatusCode(BaseResponse.STATUS_CODE_SUCCESS);
-            baseResponse.setMsg(BaseResponse.MSG_OK + " (Note: File sync failed)");
+            baseResponse.setMsg(BaseResponse.MSG_OK);
             requestHandler.response(baseResponse);
         }
+    }
 
+    /**
+     * start server
+     */
+    public void start() {
+        //Must set to true before thread start
+        isRunning = true;
+        //Thread to handle response
+        executor.submit(() -> new ResponseService(this).run());
+        executor.submit(() -> new ConnectionService(this).run());
+        //Wait for 1s to wait for thread to start
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        System.out.println("AggregationServer started at port " + port);
     }
 
     /**
      * stop server
      */
-    public void stop() throws IOException {
+    public void stop() {
         executor.shutdown();
         //shut down all threads
         isRunning = false;
-        //write data cache to file
-        syncCacheToFile();
         //close server socket
         System.out.println("AggregationServer stop");
     }
 
     public static void main(String[] args) {
+        String dataCachePath = "src/main/resources/weatherData.json";
         if (args.length > 0) {
-            new AggregationServer(Integer.parseInt(args[0])).start();
+            new AggregationServer(Integer.parseInt(args[0]), dataCachePath).start();
         } else {
             //no args
-            new AggregationServer(-1).start();
+            new AggregationServer(-1, dataCachePath).start();
         }
     }
 }
