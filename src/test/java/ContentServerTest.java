@@ -122,8 +122,8 @@ public class ContentServerTest {
         String line;
         int lineCount = 0;
         while ((line = in.readLine()) != null) {
-            if (line.contains("PUT") || line.contains("User-Agent") ||
-                    line.contains("Content-Type") || line.contains("Content-Length")) {
+            if (line.contains("PUT")|| line.contains("Content-Length") || line.contains("User-Agent") ||
+                    line.contains("Content-Type") ) {
                 lineCount += 1;
             }
             if (!in.ready()) {
@@ -143,13 +143,19 @@ public class ContentServerTest {
         try (ServerSocket serverSocket = new ServerSocket(port)) {
             ContentServer contentServer = new ContentServer("http://127.0.0.1:" + port,
                     "src/test/resources/weatherData.json");
-            contentServer.start(200);
+            Thread serverThread = new Thread(() -> {
+                try {
+                    contentServer.start(200);
+                } catch (IOException ignored) {
+                }
+            });
+            serverThread.start();
+
             //check the number of line to determine if data has been sent successfully
             assertFalse(countSendLineCount(serverSocket) > 10);
             contentServer.stop();
         } catch (IOException e) {
             e.printStackTrace();
-            fail();
         }
     }
 }

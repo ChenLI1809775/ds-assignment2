@@ -211,13 +211,13 @@ public class ContentServer {
                 }
             }
             BaseResponse contentResponse = gson.fromJson(response.toString(), BaseResponse.class);
-            System.out.printf("ContentServer id=%s: from server, code=%d, message=%s%n", weatherData.getId(),
-                    contentResponse.getStatusCode(), contentResponse.getMsg());
             //update local lamport clock with remote clock
             lamportClock.updateTime(contentResponse.getLamportClock());
+            System.out.printf("ContentServer id=%s: from server, code=%d, message=%s%n", weatherData.getId(),
+                    contentResponse.getStatusCode(), contentResponse.getMsg());
             return contentResponse;
         } catch (IOException e) {
-            System.out.printf("ContentServer: send data failed! cause: %s%n", e.getMessage());
+            //System.out.printf("ContentServer: send data failed! cause: %s%n", e.getMessage());
             return null;
         }
 
