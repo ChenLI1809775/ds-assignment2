@@ -48,6 +48,15 @@ public class ContentServer {
     }
 
     /**
+     * Get Lamport clock
+     *
+     * @return Lamport clock
+     */
+    public int getLamportClock() {
+        return lamportClock.getTime();
+    }
+
+    /**
      * Parse and validate server URL format
      *
      * @param serverURL the server URL to parse

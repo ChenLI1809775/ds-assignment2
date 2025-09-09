@@ -16,11 +16,10 @@ public class GETClient {
         String temp = serverURL;
         if (serverURL.startsWith("http://")) {
             temp = serverURL.substring(7);
-        }
-        else if (serverURL.startsWith("https://")) {
+        } else if (serverURL.startsWith("https://")) {
             temp = serverURL.substring(8);
         }
-        String[] parts = temp.split(":",2);
+        String[] parts = temp.split(":", 2);
         if (parts.length < 2) {
             throw new IllegalArgumentException("Invalid server URL format. Expected format: host:port");
         }
@@ -34,6 +33,15 @@ public class GETClient {
             throw new IllegalArgumentException("Invalid port number: " + parts[1]);
         }
         lamportClock = new LamportClock();
+    }
+
+    /**
+     * get local lamport clock
+     *
+     * @return local lamport clock
+     */
+    public int getLamportClock() {
+        return lamportClock.getTime();
     }
 
     /**

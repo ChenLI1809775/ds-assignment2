@@ -1,0 +1,40 @@
+[
+  {
+    "id": "IDS60902",
+    "name": "Adelaide (West Terrace / ngayirdapira)",
+    "state": "SA",
+    "time_zone": "CST",
+    "lat": -34.9,
+    "lon": 138.6,
+    "local_date_time": "09/09:21:00下午",
+    "local_date_time_full": "20250909210023",
+    "air_temp": 11.099,
+    "apparent_t": 10.103,
+    "cloud": "Partly cloudy",
+    "dewpt": 5.7,
+    "press": 1023.9,
+    "rel_hum": 60,
+    "wind_dir": "S",
+    "wind_spd_kmh": 15,
+    "wind_spd_kt": 8
+  },
+  {
+    "id": "IDS60901",
+    "name": "Adelaide (West Terrace / ngayirdapira)",
+    "state": "SA",
+    "time_zone": "CST",
+    "lat": -34.9,
+    "lon": 138.6,
+    "local_date_time": "09/09:21:00下午",
+    "local_date_time_full": "20250909210023",
+    "air_temp": 8.112,
+    "apparent_t": 7.031,
+    "cloud": "Partly cloudy",
+    "dewpt": 5.7,
+    "press": 1023.9,
+    "rel_hum": 60,
+    "wind_dir": "S",
+    "wind_spd_kmh": 15,
+    "wind_spd_kt": 8
+  }
+]

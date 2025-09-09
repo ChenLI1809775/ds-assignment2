@@ -20,7 +20,7 @@ class LamportClock {
      */
     public void updateTime(int sentTime) {
         int localTime = time.get();
-        int newTime = Math.max(localTime, sentTime) + 1;
+        int newTime = Math.max(localTime, sentTime);
         time.set(newTime);
     }
 

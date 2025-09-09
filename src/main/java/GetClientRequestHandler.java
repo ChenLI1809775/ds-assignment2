@@ -13,6 +13,7 @@ public class GetClientRequestHandler extends BaseRequestHandler {
     @Override
     public void response(BaseResponse baseResponse) throws IOException {
         GETClientResponse response = new GETClientResponse();
+        response.setLamportClock(getLamportClock());
         if (Objects.nonNull(weatherData)) {
             // add addition weather data to response
             response.setWeatherData(weatherData);

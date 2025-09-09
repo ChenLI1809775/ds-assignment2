@@ -201,7 +201,7 @@ public record ConnectionService(AggregationServer server) implements Runnable {
                 weatherDataID = UA[2];
                 //update lamport clock
                 int lamportTime = Integer.parseInt(UA[3]);
-                server.updateLamportClock(lamportTime);
+                server.updateLamportClock(lamportTime+1);
             }
         }
         server.putGetRequestHandler(weatherDataID, socketChannel);
@@ -235,7 +235,7 @@ public record ConnectionService(AggregationServer server) implements Runnable {
                 //update lamport clock
                 int lamportTime = Integer.parseInt(UA[3]);
                 //update lamport clock on server
-                server.updateLamportClock(lamportTime);
+                server.updateLamportClock(lamportTime+1);
             } else if (requestLine.length() > 0 && requestLine.charAt(0) == '{') {
                 //find the start line of json data
                 jsonWeatherData.append(requestLine);

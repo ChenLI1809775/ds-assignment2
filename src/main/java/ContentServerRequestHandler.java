@@ -16,7 +16,6 @@ public class ContentServerRequestHandler extends BaseRequestHandler {
     }
 
 
-
     public String getServerID() {
         return serverID;
     }
@@ -31,6 +30,7 @@ public class ContentServerRequestHandler extends BaseRequestHandler {
 
     @Override
     public void response(BaseResponse baseResponse) throws IOException {
+        baseResponse.setLamportClock(getLamportClock());
         super.response(baseResponse);
         //clear old data
         weatherData = null;

@@ -125,6 +125,8 @@ public class AggregationServer {
         GetClientRequestHandler requestHandler;
         // First check in memory cache
         WeatherData weatherData = ioService.findWeatherData(weatherDataID);
+        // update lamport clock
+        lamportClock.tick();
         requestHandler = new GetClientRequestHandler(socketChannel, lamportClock.getTime(), weatherData);
         requestHandlerQueue.add(requestHandler);
     }
@@ -138,7 +140,8 @@ public class AggregationServer {
      * @param weatherData     weather data
      */
     public void putContentPutRequestHandler(String contentServerID, SocketChannel socketChannel, WeatherData weatherData) {
-
+        // update lamport clock
+        lamportClock.tick();
         //request handler
         ContentServerRequestHandler handler;
         if (activeContentServerTrack.containsKey(weatherData.getId())) {
@@ -234,7 +237,6 @@ public class AggregationServer {
         } else if (requestHandler instanceof GetClientRequestHandler getRequestHandler) {
             //response to get client
             BaseResponse baseResponse = new BaseResponse();
-            baseResponse.setLamportClock(getLamportClock());
             getRequestHandler.response(baseResponse);
         } else if (requestHandler instanceof ErrorRequestHandler errorRequestHandler) {
             //response to error client
@@ -254,8 +256,6 @@ public class AggregationServer {
     void responseToContentServer(ContentServerRequestHandler requestHandler) throws IOException {
         WeatherData weatherData = requestHandler.getWeatherData();
         BaseResponse baseResponse = new BaseResponse();
-        // Send local lamport clock to content server
-        baseResponse.setLamportClock(lamportClock.getTime());
 
         if (weatherData == null) {
             // No content
