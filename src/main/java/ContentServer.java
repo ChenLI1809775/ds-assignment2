@@ -1,4 +1,4 @@
-import com.google.gson.Gson;
+
 
 import java.io.*;
 import java.net.Socket;
@@ -19,7 +19,6 @@ public class ContentServer {
 
     //weather data this content server maintained
     private final WeatherData weatherData;
-    private final Gson gson;
 
 
     public ContentServer(String serverURL, String weatherDataFilePath) {
@@ -39,7 +38,6 @@ public class ContentServer {
         this.host = hostPart;
         this.port = portNumber;
         this.weatherDataFilePath = weatherDataFilePath;
-        this.gson = new Gson();
 
         // Load weather data
         this.weatherData = loadWeatherDataFromFile(weatherDataFilePath);
@@ -200,7 +198,9 @@ public class ContentServer {
             BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             //update weather data before return
             WeatherData.updateWeatherData(weatherData, LocalDateTime.now(), new Random());
-            String jsonWeatherData = gson.toJson(weatherData);
+
+            CustomJsonParser customJsonParser = new CustomJsonParser();
+            String jsonWeatherData = customJsonParser.stringify(weatherData);
             String sb = String.format("PUT %s HTTP/1.1\n", weatherDataFilePath) +
                     String.format("User-Agent: ContentServer/1/0 %s %d\n",
                             weatherData.getId(), lamportClock.getTime()) +
@@ -220,13 +220,14 @@ public class ContentServer {
                     break;
                 }
             }
-            BaseResponse contentResponse = gson.fromJson(response.toString(), BaseResponse.class);
+
+            BaseResponse contentResponse = customJsonParser.parse(response.toString(), BaseResponse.class);
             //update local lamport clock with remote clock
             lamportClock.updateTime(contentResponse.getLamportClock());
             System.out.printf("ContentServer id=%s: from server, code=%d, message=%s%n", weatherData.getId(),
                     contentResponse.getStatusCode(), contentResponse.getMsg());
             return contentResponse;
-        } catch (IOException e) {
+        } catch (IOException | CustomJsonParser.JsonParsingException e) {
             //System.out.printf("ContentServer: send data failed! cause: %s%n", e.getMessage());
             return null;
         }
@@ -265,7 +266,7 @@ public class ContentServer {
 
 
     public static void main(String[] args) throws IOException {
-        if (args.length > 0) {
+        if (args.length >= 2) {
             String hostPort = args[0];
             String weatherDataFilePath = args[1];
             new ContentServer(hostPort, weatherDataFilePath).start(-1);

@@ -85,7 +85,7 @@ public class GETClient {
             GETClientResponse response = customJsonParser.parse(jsonResponse.toString(), GETClientResponse.class);
             if (response.getStatusCode() == BaseResponse.STATUS_CODE_SUCCESS) {
                 //Display weather data
-                printWeatherData(response.getWeatherData());
+                //printWeatherData(response.getWeatherData());
                 //Update local lamport clock with remote clock
                 lamportClock.updateTime(response.getLamportClock());
             } else {

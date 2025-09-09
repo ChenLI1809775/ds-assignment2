@@ -216,7 +216,7 @@ public class AggregationServerTest {
         BaseResponse baseResponse1 = mockRequest(requestData1, port);
         assertEquals(BaseResponse.STATUS_CODE_SUCCESS, baseResponse1.getStatusCode());
 
-        Thread.sleep(5);
+        Thread.sleep(1000);
         //check if data has been written correctly
         String content = new String(Files.readAllBytes(Paths.get(file.getPath())));
         Type listType = new TypeToken<ArrayList<WeatherData>>() {
