@@ -18,7 +18,7 @@ public class AggregationServer {
     //Request queue
     private final Queue<BaseRequestHandler> requestHandlerQueue;
 
-    //Max update interval(s) for content server
+    //Max update interval(s) for content server update
     private double maxUpdateInterval = 30.0;
     //local lamport clock
     private final LamportClock lamportClock;

@@ -1,9 +1,9 @@
 import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
 
 import java.io.*;
-import java.lang.reflect.Type;
 import java.net.Socket;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -124,11 +124,12 @@ public class ContentServer {
      * @return the loaded WeatherData object
      */
     private WeatherData loadWeatherDataFromFile(String filePath) {
-        try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
+        try {
             // parse json array to get first weatherData
-            Type listType = new TypeToken<ArrayList<WeatherData>>() {
-            }.getType();
-            ArrayList<WeatherData> weatherDataList = gson.fromJson(br, listType);
+            CustomJsonParser customJsonParser = new CustomJsonParser();
+            String content = Files.readString(Paths.get(filePath));
+            ArrayList<WeatherData> weatherDataList = customJsonParser.parse(content,
+                    ArrayList.class, WeatherData.class);
 
             if (weatherDataList != null && !weatherDataList.isEmpty()) {
                 // Get the first weatherData

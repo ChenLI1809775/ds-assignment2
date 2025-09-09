@@ -1,6 +1,3 @@
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -51,8 +48,10 @@ public class GETClient {
      * @return formatted weather data
      */
     public String printWeatherData(WeatherData weatherData) {
-        Gson gson = new GsonBuilder().setPrettyPrinting().create();
-        String formattedJson = gson.toJson(weatherData);
+//        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+//        String formattedJson = gson.toJson(weatherData);
+        CustomJsonParser jsonParser = new CustomJsonParser();
+        String formattedJson = jsonParser.stringifyPretty(weatherData);
         System.out.println(formattedJson);
         return formattedJson;
     }
@@ -81,8 +80,9 @@ public class GETClient {
                     break;
                 }
             }
-            Gson gson = new Gson();
-            GETClientResponse response = gson.fromJson(jsonResponse.toString(), GETClientResponse.class);
+
+            CustomJsonParser customJsonParser = new CustomJsonParser();
+            GETClientResponse response = customJsonParser.parse(jsonResponse.toString(), GETClientResponse.class);
             if (response.getStatusCode() == BaseResponse.STATUS_CODE_SUCCESS) {
                 //Display weather data
                 printWeatherData(response.getWeatherData());

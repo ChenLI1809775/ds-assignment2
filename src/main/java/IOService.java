@@ -1,11 +1,8 @@
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.reflect.TypeToken;
-
 import java.io.File;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -129,11 +126,14 @@ public class IOService {
             return fileDataMap;
         }
 
-        Gson gson = new GsonBuilder().setPrettyPrinting().create();
-        try (FileReader reader = new FileReader(file)) {
-            java.lang.reflect.Type listType = new TypeToken<ArrayList<WeatherData>>() {
-            }.getType();
-            ArrayList<WeatherData> weatherDataList = gson.fromJson(reader, listType);
+        try {
+            //Check if data has been deleted correctly
+            String content = Files.readString(Paths.get(file.getPath()));
+            if (content.length() < 1) {
+                return fileDataMap;
+            }
+            CustomJsonParser customJsonParser = new CustomJsonParser();
+            ArrayList<WeatherData> weatherDataList = customJsonParser.parse(content, ArrayList.class, WeatherData.class);
 
             if (weatherDataList != null) {
                 // Find the specific weather data by ID
@@ -178,9 +178,9 @@ public class IOService {
 
         // Write merged data to temporary file
         ArrayList<WeatherData> mergedDataList = new ArrayList<>(fileDataMap.values());
-        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        CustomJsonParser customJsonParser = new CustomJsonParser();
         try (FileWriter writer = new FileWriter(tempFile)) {
-            writer.write(gson.toJson(mergedDataList));
+            writer.write(customJsonParser.stringify(mergedDataList));
         } catch (IOException e) {
             System.err.println("Error writing weather data to file: " + e.getMessage());
             throw new RuntimeException(e);
@@ -269,18 +269,14 @@ public class IOService {
                 return null;
             }
 
-            Gson gson = new Gson();
-            try (FileReader reader = new FileReader(file)) {
-                java.lang.reflect.Type listType = new TypeToken<ArrayList<WeatherData>>() {
-                }.getType();
-                ArrayList<WeatherData> weatherDataList = gson.fromJson(reader, listType);
-
-                if (weatherDataList != null) {
-                    // Find the specific weather data by ID
-                    for (WeatherData data : weatherDataList) {
-                        if (data != null && weatherDataID.equals(data.getId())) {
-                            return data;
-                        }
+            CustomJsonParser customJsonParser = new CustomJsonParser();
+            String content = Files.readString(Paths.get(dataCachePath));
+            ArrayList<WeatherData> weatherDataList = customJsonParser.parse(content, ArrayList.class, WeatherData.class);
+            if (weatherDataList != null) {
+                // Find the specific weather data by ID
+                for (WeatherData data : weatherDataList) {
+                    if (data != null && weatherDataID.equals(data.getId())) {
+                        return data;
                     }
                 }
             }

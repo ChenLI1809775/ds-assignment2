@@ -28,15 +28,11 @@ public class AggregationServerTest {
 
     @BeforeAll
     public static void setUp() {
-        Gson gson = new Gson();
         try {
             // read json from file
-            BufferedReader br = new BufferedReader(new FileReader(defaultTestDataCachePath));
-            // parse json array to get first weatherData
-            Type listType = new TypeToken<ArrayList<WeatherData>>(){}.getType();
-            ArrayList<WeatherData> weatherDataList = gson.fromJson(br, listType);
-            br.close();
-
+            String content = Files.readString(Paths.get(defaultTestDataCachePath));
+            CustomJsonParser jsonParser = new CustomJsonParser();
+            ArrayList<WeatherData> weatherDataList = jsonParser.parse(content, ArrayList.class, WeatherData.class);
             if (weatherDataList != null && !weatherDataList.isEmpty()) {
                 // get first weatherData
                 weatherData = weatherDataList.get(0);
@@ -71,9 +67,9 @@ public class AggregationServerTest {
                         String.format("Content-Length: %d\n", 100);
 
             case TYPE_PUT_VALID_CONTENT: {
-                Gson gson = new Gson();
                 //Valid PUT header with data
-                String jsonWeatherData = gson.toJson(weatherData);
+                CustomJsonParser customJsonParser = new CustomJsonParser();
+                String jsonWeatherData = customJsonParser.stringify(weatherData);
                 return String.format("PUT %s %s\n", endpoint, protocol) +
                         String.format("User-Agent: ContentServer/1/0 %s %d\n", weatherData.getId(), 1) +
                         "Content-Type: application/json\n" +
@@ -192,7 +188,6 @@ public class AggregationServerTest {
 
     /**
      * Test Multiple PUT
-     *
      */
     @Test
     public void testMultiplePut() throws IOException, InterruptedException {

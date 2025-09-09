@@ -1,4 +1,4 @@
-import com.google.gson.Gson;
+
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -201,7 +201,7 @@ public record ConnectionService(AggregationServer server) implements Runnable {
                 weatherDataID = UA[2];
                 //update lamport clock
                 int lamportTime = Integer.parseInt(UA[3]);
-                server.updateLamportClock(lamportTime+1);
+                server.updateLamportClock(lamportTime + 1);
             }
         }
         server.putGetRequestHandler(weatherDataID, socketChannel);
@@ -235,7 +235,7 @@ public record ConnectionService(AggregationServer server) implements Runnable {
                 //update lamport clock
                 int lamportTime = Integer.parseInt(UA[3]);
                 //update lamport clock on server
-                server.updateLamportClock(lamportTime+1);
+                server.updateLamportClock(lamportTime + 1);
             } else if (requestLine.length() > 0 && requestLine.charAt(0) == '{') {
                 //find the start line of json data
                 jsonWeatherData.append(requestLine);
@@ -245,9 +245,9 @@ public record ConnectionService(AggregationServer server) implements Runnable {
             }
         }
         if (!Objects.equals(jsonWeatherData.toString(), "")) {
-            Gson gson = new Gson();
+            CustomJsonParser jsonParser = new CustomJsonParser();
             try {
-                WeatherData weatherData = gson.fromJson(jsonWeatherData.toString(), WeatherData.class);
+                WeatherData weatherData = jsonParser.parse(jsonWeatherData.toString(), WeatherData.class);
                 //put request  handler to queue
                 server.putContentPutRequestHandler(contentServerID, socketChannel, weatherData);
             } catch (Exception e) {

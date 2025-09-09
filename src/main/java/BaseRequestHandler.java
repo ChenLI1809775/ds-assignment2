@@ -1,5 +1,3 @@
-import com.google.gson.Gson;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
@@ -70,8 +68,10 @@ public class BaseRequestHandler implements Comparable<BaseRequestHandler> {
      * @throws IOException if an I/O error occurs
      */
     public void response(BaseResponse baseResponse) throws IOException {
-        Gson gson = new Gson();
-        String response = gson.toJson(baseResponse);
+//        Gson gson = new Gson();
+//        String response = gson.toJson(baseResponse);
+        CustomJsonParser jsonParser = new CustomJsonParser();
+        String response = jsonParser.stringify(baseResponse);
         ByteBuffer writeBuffer = ByteBuffer.wrap(response.getBytes());
         while (writeBuffer.hasRemaining()) {
             socketChannel.write(writeBuffer);
